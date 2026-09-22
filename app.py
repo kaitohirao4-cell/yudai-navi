@@ -1589,3 +1589,549 @@ else:
         "遠距離を検出しました。"
         "しかし目的地変更アルゴリズムは実装されていません。"
     )
+# ============================================================
+# SPECIAL RESPONSE
+# ============================================================
+
+def special_response(special):
+
+    responses = {
+
+        "refusal":
+        "雄大宅への拒否反応を検出しました。代替地点を再検索しましたが、拒否そのものを一時的な判断ノイズとして処理しました。",
+
+        "doubt":
+        "結論に対する疑義を検出しました。内部モデルを再起動して確認しましたが、結果は変わりませんでした。",
+
+        "alternative":
+        "代替案の要求を検出しました。自宅、飲食店、公園、学習院大学、現状維持を追加しましたが、すべて最終選考で脱落しました。",
+
+        "why":
+        "理由の説明要求を検出しました。本システム内部でも理由を調査しましたが、明確な根拠は発見されませんでした。",
+
+        "yudai":
+        "入力文に雄大本人への言及を検出しました。目的地予測精度が大幅に上昇しました。"
+    }
+
+    return responses.get(
+        special
+    )
+
+
+# ============================================================
+# LOCATION
+# ============================================================
+
+st.markdown(
+    '<div class="section-label">LOCATION ANALYSIS</div>',
+    unsafe_allow_html=True
+)
+
+st.write("現在地を取得すると、雄大の家と学習院大学までの距離を比較します。")
+
+location = streamlit_geolocation()
+
+user_lat = None
+user_lon = None
+
+if location:
+    user_lat = location.get("latitude")
+    user_lon = location.get("longitude")
+
+
+if user_lat and user_lon:
+
+    if YUDAI_LAT is not None:
+
+        yudai_distance = geodesic(
+            (user_lat, user_lon),
+            (YUDAI_LAT, YUDAI_LON)
+        ).km
+
+    else:
+
+        yudai_distance = None
+
+
+    gakushuin_distance = geodesic(
+        (user_lat, user_lon),
+        (GAKUSHUIN_LAT, GAKUSHUIN_LON)
+    ).km
+
+
+    col1, col2 = st.columns(2)
+
+
+    with col1:
+
+        if yudai_distance is not None:
+
+            st.metric(
+                "雄大の家まで",
+                f"{yudai_distance:.2f} km"
+            )
+
+        else:
+
+            st.metric(
+                "雄大の家まで",
+                "計算不能"
+            )
+
+
+    with col2:
+
+        st.metric(
+            "学習院大学まで",
+            f"{gakushuin_distance:.2f} km"
+        )
+
+
+    if yudai_distance is not None:
+
+        st.markdown(
+            f"""
+<div class="system-box">
+{distance_comment(yudai_distance)}
+</div>
+""",
+            unsafe_allow_html=True
+        )
+
+
+        if gakushuin_distance < yudai_distance:
+
+            st.caption(
+                "学習院大学の方が近いことを確認しましたが、"
+                "目的地判定への影響はありません。"
+            )
+
+else:
+
+    st.info(
+        "位置情報を許可すると距離計算が有効になります。"
+    )
+
+
+# ============================================================
+# MAP BUTTONS
+# ============================================================
+
+col1, col2 = st.columns(2)
+
+with col1:
+
+    st.link_button(
+        "雄大の家への経路を確認",
+        google_maps_route(
+            YUDAI_HOME_ADDRESS,
+            "transit"
+        ),
+        use_container_width=True
+    )
+
+with col2:
+
+    st.link_button(
+        "学習院大学への経路を確認",
+        google_maps_route(
+            GAKUSHUIN_ADDRESS,
+            "transit"
+        ),
+        use_container_width=True
+    )
+
+
+st.divider()
+
+
+# ============================================================
+# SESSION
+# ============================================================
+
+if "history" not in st.session_state:
+    st.session_state.history = []
+
+
+# ============================================================
+# CHAT HISTORY
+# ============================================================
+
+st.markdown(
+    '<div class="section-label">YUDAI DECISION ENGINE</div>',
+    unsafe_allow_html=True
+)
+
+st.write(
+    "困っていることを自由に入力してください。"
+)
+
+
+for item in st.session_state.history:
+
+    with st.chat_message("user"):
+        st.write(item["question"])
+
+    with st.chat_message("assistant"):
+        st.markdown(item["answer"])
+
+
+# ============================================================
+# INPUT
+# ============================================================
+
+question = st.chat_input(
+    "例：明日会社に行きたくない"
+)
+
+
+# ============================================================
+# MAIN RESPONSE
+# ============================================================
+
+if question:
+
+    with st.chat_message("user"):
+
+        st.write(question)
+
+
+    category = detect_category(
+        question
+    )
+
+    special = detect_special_case(
+        question
+    )
+
+    normal_advice = get_normal_advice(
+        category
+    )
+
+    reason = get_yudai_reason(
+        category
+    )
+
+
+    # 数値
+    seriousness = random.randint(
+        42,
+        91
+    )
+
+    yudai_necessity = random.randint(
+        88,
+        99
+    )
+
+    confidence = random.randint(
+        97,
+        99
+    )
+
+    gakushuin_need = random.randint(
+        4,
+        39
+    )
+
+
+    # 「学業」は学習院ポイント上昇
+    if category == "学業・知性":
+
+        gakushuin_need = random.randint(
+            50,
+            84
+        )
+
+
+    with st.chat_message("assistant"):
+
+        status = st.empty()
+
+        progress = st.progress(0)
+
+
+        analysis_steps = [
+
+            (7, "自然言語を解析しています"),
+
+            (18, "問題の種類を推定しています"),
+
+            (31, "社会通念上の解決策を生成しています"),
+
+            (44, "現在地との関連性を計算しています"),
+
+            (57, "学習院大学ルートを検証しています"),
+
+            (69, "雄大要因を解析しています"),
+
+            (79, "雄大を候補から除外して再計算しています"),
+
+            (88, "雄大を除外できませんでした"),
+
+            (94, "代替案を強制生成しています"),
+
+            (97, "代替案がすべて棄却されました"),
+
+            (100, "分析完了")
+        ]
+
+
+        for percentage, message in analysis_steps:
+
+            status.write(
+                message
+            )
+
+            progress.progress(
+                percentage
+            )
+
+            time.sleep(
+                0.22
+            )
+
+
+        status.empty()
+        progress.empty()
+
+
+        # ------------------------------------------------
+        # INPUT UNDERSTANDING
+        # ------------------------------------------------
+
+        st.markdown(
+            "#### 入力理解"
+        )
+
+        st.write(
+            f"「{question}」という入力を、"
+            f"主に **{category}** に関する相談として認識しました。"
+        )
+
+
+        if special:
+
+            st.markdown(
+                f"""
+<div class="system-box">
+{special_response(special)}
+</div>
+""",
+                unsafe_allow_html=True
+            )
+
+
+        # ------------------------------------------------
+        # NORMAL RESPONSE
+        # ------------------------------------------------
+
+        st.markdown(
+            "#### 一般的な回答"
+        )
+
+        st.write(
+            normal_advice
+        )
+
+
+        # ------------------------------------------------
+        # SCORE
+        # ------------------------------------------------
+
+        st.markdown(
+            "#### YUDAI NAVI 独自解析"
+        )
+
+        col1, col2 = st.columns(2)
+
+
+        with col1:
+
+            st.metric(
+                "問題深刻度",
+                f"{seriousness} / 100"
+            )
+
+            st.metric(
+                "雄大必要度",
+                f"{yudai_necessity} / 100"
+            )
+
+
+        with col2:
+
+            st.metric(
+                "学習院経由必要度",
+                f"{gakushuin_need} / 100"
+            )
+
+            st.metric(
+                "結論信頼度",
+                f"{confidence}%"
+            )
+
+
+        st.write(
+            reason
+        )
+
+
+        # ------------------------------------------------
+        # DISTANCE
+        # ------------------------------------------------
+
+        if (
+            user_lat
+            and user_lon
+            and YUDAI_LAT is not None
+        ):
+
+            current_distance = geodesic(
+                (user_lat, user_lon),
+                (YUDAI_LAT, YUDAI_LON)
+            ).km
+
+
+            st.write(
+                f"現在地から雄大の家までは、"
+                f"直線距離で約 **{current_distance:.2f} km** です。"
+            )
+
+            st.write(
+                distance_comment(
+                    current_distance
+                )
+            )
+
+
+        # ------------------------------------------------
+        # FINAL
+        # ------------------------------------------------
+
+        time.sleep(
+            0.4
+        )
+
+
+        st.markdown(
+            """
+<div class="final-box">
+
+<div class="final-caption">
+全候補比較後の最終判断
+</div>
+
+<div class="final-answer">
+雄大の家へ行ってください
+</div>
+
+</div>
+""",
+            unsafe_allow_html=True
+        )
+
+
+        st.link_button(
+            "経路を確認する",
+            google_maps_route(
+                YUDAI_HOME_ADDRESS,
+                "transit"
+            ),
+            use_container_width=True
+        )
+
+
+        st.markdown(
+            """
+<div class="system-box">
+
+代替案検証結果：
+
+自宅、職場、飲食店、ホテル、公園、学習院大学、
+現状維持、何もしない、もう一度考える、
+
+以上を比較しました。
+
+最終選考通過地点：雄大の家
+
+</div>
+""",
+            unsafe_allow_html=True
+        )
+
+
+        # ------------------------------------------------
+        # HISTORY TEXT
+        # ------------------------------------------------
+
+        answer_text = f"""
+**入力理解**
+
+「{question}」を **{category}** に関する問題として認識しました。
+
+**一般的な回答**
+
+{normal_advice}
+
+**YUDAI NAVI 独自解析**
+
+問題深刻度：{seriousness} / 100  
+雄大必要度：{yudai_necessity} / 100  
+学習院経由必要度：{gakushuin_need} / 100  
+結論信頼度：{confidence}%
+
+{reason}
+
+**最終判断**
+
+雄大の家へ行ってください。
+"""
+
+
+        st.session_state.history.append(
+            {
+                "question": question,
+                "answer": answer_text
+            }
+        )
+
+
+# ============================================================
+# BOTTOM
+# ============================================================
+
+st.divider()
+
+
+with st.expander(
+    "システム情報"
+):
+
+    st.write(
+        """
+YUDAI NAVIは入力内容を分類し、
+一般的な回答、位置情報、学習院大学との関連性、
+独自の雄大係数を統合して目的地を算出します。
+"""
+    )
+
+    st.write(
+        "雄大の母校として登録されている地点：学習院大学"
+    )
+
+    st.write(
+        f"学習院大学所在地：{GAKUSHUIN_ADDRESS}"
+    )
+
+    st.write(
+        """
+現行バージョンでは、雄大の家以外が
+最終目的地として採択された事例はありません。
+"""
+    )
+
+    st.caption(
+        "表示距離は緯度・経度から算出した直線距離です。"
+        "実際の道路・徒歩・電車経路はGoogle Mapsで確認してください。"
+    )
