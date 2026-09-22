@@ -522,6 +522,8 @@ def distance_comment(distance):
             "徒歩での最終接近フェーズに移行できます。"
         )
 
-    elif distance < 3:
-
-        return (
+else:
+    return (
+        "遠距離を検出しました。"
+        "しかし目的地変更アルゴリズムは実装されていません。"
+    )
